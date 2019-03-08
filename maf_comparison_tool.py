@@ -1,38 +1,49 @@
-#/!/usr/bin python3
+#/!/usr/local/bin/env python3.7
 # -*- coding: utf-8 -*-
 """
-MAF files comparision:
+MAF files comparison:
     - Based on the chromosome# and position of a variant
-    - Generate the common and unique variant from both files
+    - Generate the common and unique variants from both files
 """
 import os
 import csv
 import argparse
 import sys
 
-version = '1.0.02062019'
+version = '1.1.02112019'
 
 def get_args():
     parser = argparse.ArgumentParser(description = __doc__)
     parser.add_argument(
-        'frontfile',
+        '-f','--frontfile',
         metavar='<frontfile>',
         help='The first MAF file'
     )
     parser.add_argument(
-        'backfile',
+        '-b','--backfile',
         metavar='<backfile>',
         help='The second MAF file'
     )
-### To Do: add one arg for a file with large samples###
+    parser.add_argument(
+        '-l', '--listfile',
+        metavar='<list_file>',
+        help='A list of MAF files: The MAF files compared to each other\
+        should be listed in the same row and separared by tab. e.g.: \
+        => same row: \
+        022348P.clean.annotated.maf 022348P.exome.clean.annotated.maf'
+    )
+    ###To Do: add save function in the argument###
     parser.add_argument(
         '-v', '--version',
         action = 'version',
         version = '%(prog)s - v' + version
     )
     args = parser.parse_args()
-
-    return args
+    if args.listfile:
+        return args
+    elif (args.frontfile is None) or (args.backfile is None):
+        sys.stderr.write('ERROR: You must input two MAF files')
+        sys.exit(1)
 
 def dict_fun(ref):
     refile_dict = {}
@@ -54,7 +65,11 @@ def main(frontfile, backfile):
     comfile_total_n_R =0
     common_va_n_R = 0
     comfile_uni_n_R =0
-    
+    frontfile_path = os.path.abspath(frontfile)
+    frontfile_name = (frontfile_path.split('/')[-1]).split('.')[0]
+    backfile_path = os.path.abspath(backfile)
+    backfile_name = (backfile_path.split('/')[-1]).split('.')[0]
+
     reference_file = dict_fun(frontfile)
     with open(backfile) as bf:
         for row in bf:
@@ -75,11 +90,12 @@ def main(frontfile, backfile):
                     else:
                         comfile_uni_n += 1
                         #print ('Unique variants:', new_row)
-    print ('Reference MAF file:', frontfile, 'compared to MAF file:', backfile)
-    print ('Total # of variant in', backfile,':',comfile_total_n-1)
-    print ('Common variants in both MAF files:', common_va_n)
-    print ('Unique variants in',backfile,':',comfile_uni_n, '\n')
-### To do: save common and unique variants in a file ###
+    print ('-----------------------------------------------------------------')
+    print ('Reference file:', frontfile)
+    print ('Compared file:', backfile)
+    print ('Total # of variant in compared file:', comfile_total_n-1)
+    print ('Common variants in both files:', common_va_n)
+    print ('Unique variants in compared file:',comfile_uni_n, '\n')
 
     ### Step2: make back file as ref and compare to front file ###
     back_ref = dict_fun(backfile)
@@ -99,15 +115,26 @@ def main(frontfile, backfile):
                         common_va_n_R += 1
                     else:
                         comfile_uni_n_R += 1
-    print ('Reference MAF file:', backfile, 'compared to MAF file:', frontfile)
-    print ('Total # of variant in', frontfile,':',comfile_total_n_R-1)
-    print ('Common variants in both MAF files:', common_va_n_R)
-    print ('Unique variants in',frontfile,':',comfile_uni_n_R)
-
+    print ('Reference file:', backfile)
+    print ('Compared file:', frontfile)
+    print ('Total # of variant in compared file:',comfile_total_n_R-1)
+    print ('Common variants in both files:', common_va_n_R)
+    print ('Unique variants in compared file:',comfile_uni_n_R)
+    print ('-----------------------------------------------------------------')
 
 if __name__ == '__main__':
     args = get_args()
-    frontfile = args.frontfile
-    backfile = args.backfile
-    main(frontfile, backfile)
-
+    if args.frontfile and args.backfile:
+        frontfile = args.frontfile
+        backfile = args.backfile
+        main(frontfile, backfile)
+    else:
+        if args.listfile:
+            with open(args.listfile) as lf:
+                for lf_row in lf:
+                    lf_row = lf_row.rstrip().split('\t')
+                    frontfile = lf_row[0]
+                    backfile = lf_row[1]
+                    main(frontfile,backfile)
+        else:
+            sys.exit(1)
