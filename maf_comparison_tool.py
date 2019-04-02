@@ -1,16 +1,17 @@
 #/!/usr/local/bin/env python3.7
 # -*- coding: utf-8 -*-
 """
-MAF files comparison:
-    - Based on the chromosome# and position of a variant
-    - Generate the common and unique variants from both files
+MAF files comparison: Based on the chromosome# and position of a variant and 
+generate the statistics table from both files
 """
 import os
 import csv
 import argparse
 import sys
+from pprint import pprint as pp
+import json
 
-version = '1.1.02112019'
+version = '1.1.04022019'
 
 def get_args():
     parser = argparse.ArgumentParser(description = __doc__)
@@ -32,7 +33,11 @@ def get_args():
         => same row: \
         022348P.clean.annotated.maf 022348P.exome.clean.annotated.maf'
     )
-    ###To Do: add save function in the argument###
+    parser.add_argument(
+        '-o','--savefile',
+        metavar='<savefile>',
+        help='Save the output result as csv file'
+    )
     parser.add_argument(
         '-v', '--version',
         action = 'version',
@@ -41,9 +46,28 @@ def get_args():
     args = parser.parse_args()
     if args.listfile:
         return args
+    elif args.frontfile and args.backfile:
+        return args
     elif (args.frontfile is None) or (args.backfile is None):
         sys.stderr.write('ERROR: You must input two MAF files')
         sys.exit(1)
+
+def check_args(args):
+    if args.frontfile and args.backfile:
+        frontfile = args.frontfile
+        backfile = args.backfile
+        savefile = args.savefile
+        main(frontfile, backfile)
+    else:
+        if args.listfile:
+            with open(args.listfile) as lf:
+                for lf_row in lf:
+                    lf_row = lf_row.rstrip().split('\t')
+                    frontfile = lf_row[0]
+                    backfile = lf_row[1]
+                    main(frontfile, backfile)
+        else:
+            sys.exit(1)
 
 def dict_fun(ref):
     refile_dict = {}
@@ -57,8 +81,6 @@ def dict_fun(ref):
     return refile_dict
 
 def main(frontfile, backfile):
-
-    ### Step1: make front file as ref and compare to back file ###
     comfile_total_n = 0
     common_va_n = 0
     comfile_uni_n = 0
@@ -66,11 +88,12 @@ def main(frontfile, backfile):
     common_va_n_R = 0
     comfile_uni_n_R =0
     frontfile_path = os.path.abspath(frontfile)
-    frontfile_name = (frontfile_path.split('/')[-1]).split('.')[0]
+    frontfile_name = str((frontfile_path.split('/')[-1]).split('.')[0])
     backfile_path = os.path.abspath(backfile)
-    backfile_name = (backfile_path.split('/')[-1]).split('.')[0]
+    backfile_name = str((backfile_path.split('/')[-1]).split('.')[0])
 
     reference_file = dict_fun(frontfile)
+    ### Step1-1: make front file as ref and compare to back file ###
     with open(backfile) as bf:
         for row in bf:
             if not row.startswith('#version'):
@@ -90,14 +113,8 @@ def main(frontfile, backfile):
                     else:
                         comfile_uni_n += 1
                         #print ('Unique variants:', new_row)
-    print ('-----------------------------------------------------------------')
-    print ('Reference file:', frontfile)
-    print ('Compared file:', backfile)
-    print ('Total # of variant in compared file:', comfile_total_n-1)
-    print ('Common variants in both files:', common_va_n)
-    print ('Unique variants in compared file:',comfile_uni_n, '\n')
 
-    ### Step2: make back file as ref and compare to front file ###
+    ### Step1-2: make back file as ref and compare to front file ###
     back_ref = dict_fun(backfile)
     with open(frontfile) as ff:
         for line in ff:
@@ -115,26 +132,62 @@ def main(frontfile, backfile):
                         common_va_n_R += 1
                     else:
                         comfile_uni_n_R += 1
-    print ('Reference file:', backfile)
-    print ('Compared file:', frontfile)
-    print ('Total # of variant in compared file:',comfile_total_n_R-1)
-    print ('Common variants in both files:', common_va_n_R)
-    print ('Unique variants in compared file:',comfile_uni_n_R)
-    print ('-----------------------------------------------------------------')
+
+    ### Step 2: putting the data together###
+    #header = ['Samples', '#_Common_Var','#_Uni_file1','#_file1','#_Uni_file2','#_file2']
+    #print (header)
+    final_dict = {}
+    if frontfile_name not in final_dict:
+        final_dict[frontfile_name] = {}
+    final_dict[frontfile_name]['#_Common_Var'] = str(common_va_n)
+    final_dict[frontfile_name]['#_Uni_frontfile'] = str(comfile_uni_n)
+    final_dict[frontfile_name]['#_frontfile'] = str(comfile_total_n -1)
+
+    if backfile_name in final_dict:
+        if common_va_n == common_va_n_R:
+            final_dict[frontfile_name]['#_Uni_backfile'] = str(comfile_uni_n_R)
+            final_dict[frontfile_name]['#_backfile'] = str(comfile_total_n_R -1) 
+        else:
+            print ('Something wrong in the script regarding the matched method!')
+    else:
+        print (backfile_name, 'is not matched up with ', frontfile_name)
+   
+    ### Step 3: save a csv file ###
+
+    header = ['Samples', '#_Common_Var','#_Uni_frontfile', \
+            '#_frontfile','#_Uni_backfile','#_backfile']
+
+    #if savefile:
+        file_exists = os.path.isfile(savefile)
+        with open(savefile,'a') as csvfile:
+            if not file_exists:
+                csvfile.write(','.join(header) + '\n')
+                print (','.join(header))
+            headers = {}
+            for k, v in final_dict.items():
+                tem = []
+                for kk, vv in v.items():
+                    tem.append(vv)
+                    headers[kk] = 1
+                new_line = [k] + tem
+                csvfile.write(','.join(new_line) + '\n')
+                print (','.join(new_line))
+
+    #else:
+    #    file_exists = os.path.isfile(savefile)
+    #    if not file_exists:
+    #        print (header)
+    #    headers = {}
+    #    for k, v in final_dict.items():
+    #        tem = []
+    #        for kk, vv in v.items():
+    #            tem.append(vv)
+    #            headers[kk] = 1
+    #        new_line = [k] + tem
+    #        print (','.join(new_line))
+
 
 if __name__ == '__main__':
     args = get_args()
-    if args.frontfile and args.backfile:
-        frontfile = args.frontfile
-        backfile = args.backfile
-        main(frontfile, backfile)
-    else:
-        if args.listfile:
-            with open(args.listfile) as lf:
-                for lf_row in lf:
-                    lf_row = lf_row.rstrip().split('\t')
-                    frontfile = lf_row[0]
-                    backfile = lf_row[1]
-                    main(frontfile,backfile)
-        else:
-            sys.exit(1)
+    check_args(args)
+
