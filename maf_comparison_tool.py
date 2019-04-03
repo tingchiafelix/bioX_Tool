@@ -49,25 +49,9 @@ def get_args():
     elif args.frontfile and args.backfile:
         return args
     elif (args.frontfile is None) or (args.backfile is None):
-        sys.stderr.write('ERROR: You must input two MAF files')
+        sys.stderr.write('ERROR: You must input two MAF files or a list of MAF file in tsv'
+        )
         sys.exit(1)
-
-def check_args(args):
-    if args.frontfile and args.backfile:
-        frontfile = args.frontfile
-        backfile = args.backfile
-        savefile = args.savefile
-        main(frontfile, backfile)
-    else:
-        if args.listfile:
-            with open(args.listfile) as lf:
-                for lf_row in lf:
-                    lf_row = lf_row.rstrip().split('\t')
-                    frontfile = lf_row[0]
-                    backfile = lf_row[1]
-                    main(frontfile, backfile)
-        else:
-            sys.exit(1)
 
 def dict_fun(ref):
     refile_dict = {}
@@ -80,7 +64,12 @@ def dict_fun(ref):
                     refile_dict[va_key] = 1            
     return refile_dict
 
-def main(frontfile, backfile):
+def main(input_file):
+    ###Separate the files ###
+    input_file = input_file.rstrip().split(',')
+    frontfile = input_file[0]
+    backfile = input_file[1]
+
     comfile_total_n = 0
     common_va_n = 0
     comfile_uni_n = 0
@@ -157,7 +146,8 @@ def main(frontfile, backfile):
     header = ['Samples', '#_Common_Var','#_Uni_frontfile', \
             '#_frontfile','#_Uni_backfile','#_backfile']
 
-    #if savefile:
+    try:
+        savefile = input_file[2]
         file_exists = os.path.isfile(savefile)
         with open(savefile,'a') as csvfile:
             if not file_exists:
@@ -173,21 +163,47 @@ def main(frontfile, backfile):
                 csvfile.write(','.join(new_line) + '\n')
                 print (','.join(new_line))
 
-    #else:
-    #    file_exists = os.path.isfile(savefile)
-    #    if not file_exists:
-    #        print (header)
-    #    headers = {}
-    #    for k, v in final_dict.items():
-    #        tem = []
-    #        for kk, vv in v.items():
-    #            tem.append(vv)
-    #            headers[kk] = 1
-    #        new_line = [k] + tem
-    #        print (','.join(new_line))
+    except IndexError:
+        header_out = ','.join(header)
+
+        headers = {}
+        for k, v in final_dict.items():
+            tem = []
+            for kk, vv in v.items():
+                tem.append(vv)
+                headers[kk] = 1
+            new_line = [k] + tem
+            print (','.join(new_line))
 
 
 if __name__ == '__main__':
     args = get_args()
-    check_args(args)
+    frontfile = args.frontfile
+    backfile = args.backfile
+    savefile = args.savefile
+    listfile = args.listfile
+
+    if frontfile and backfile:
+        if savefile:
+            front_back_save = ','.join([frontfile]+[backfile]+[savefile])
+            main(front_back_save)
+        else:
+            front_back = ','.join([frontfile]+[backfile])
+            main(front_back)
+
+    elif listfile:
+        with open(listfile,'r') as lf:
+            for lf_row in lf:
+                lf_row = lf_row.rstrip().split('\t')
+                frontfile = lf_row[0]
+                backfile = lf_row[1]
+                if savefile:
+                    front_back_save = ','.join([frontfile]+[backfile]+[savefile])
+                    main(front_back_save)
+                else:
+                    front_back = ','.join([frontfile]+[backfile])
+                    main(front_back)
+    else:
+        sys.exit(1)
+
 
